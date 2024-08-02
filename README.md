@@ -1,4 +1,4 @@
-# 🤖 Machine Learning App
+# DIabetes Classification
 
 This is a machine learning app.
 
