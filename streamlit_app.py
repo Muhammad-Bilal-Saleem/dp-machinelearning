@@ -1,121 +1,67 @@
-import streamlit as st
 import numpy as np
+import streamlit as st
 import pandas as pd
-from sklearn.ensemble import RandomForestClassifier
+import joblib
 
-st.title('🤖 Machine Learning App')
+# Load the pre-fitted scaler and models
+scaler = joblib.load('scaler.pkl')
+knn_model = joblib.load('knn_model.pkl')
+lg_model = joblib.load('lg_model.pkl')
 
-st.info('This is app builds a machine learning model!')
+st.title("Diabetes Classifier")
+url = "https://www.kaggle.com/datasets/uciml/pima-indians-diabetes-database"
+st.write("### Dataset Used: [%s](%s)" % ("Pima Indians Diabetes Database", url))
 
-with st.expander('Data'):
-  st.write('**Raw data**')
-  df = pd.read_csv('https://raw.githubusercontent.com/dataprofessor/data/master/penguins_cleaned.csv')
-  df
+col1, col2, col3, col4 = st.columns(4)
 
-  st.write('**X**')
-  X_raw = df.drop('species', axis=1)
-  X_raw
+with col1:
+    pregnancies = st.number_input("Pregnancies", step=1, min_value=0)
+    insulin = st.number_input("Insulin", step=1, min_value=0)
 
-  st.write('**y**')
-  y_raw = df.species
-  y_raw
+with col2:
+    glucose = st.number_input("Glucose", step=1, min_value=0)
+    bmi = st.number_input("BMI", step=0.1, min_value=0.1, format="%0.1f")
 
-with st.expander('Data visualization'):
-  st.scatter_chart(data=df, x='bill_length_mm', y='body_mass_g', color='species')
+with col3:
+    blood_pressure = st.number_input("Blood Pressure", step=1, min_value=0)
+    dpf = st.number_input("Diabetes Pedigree Function", step=0.01, min_value=0.00, max_value=1.00)
 
-# Input features
-with st.sidebar:
-  st.header('Input features')
-  island = st.selectbox('Island', ('Biscoe', 'Dream', 'Torgersen'))
-  bill_length_mm = st.slider('Bill length (mm)', 32.1, 59.6, 43.9)
-  bill_depth_mm = st.slider('Bill depth (mm)', 13.1, 21.5, 17.2)
-  flipper_length_mm = st.slider('Flipper length (mm)', 172.0, 231.0, 201.0)
-  body_mass_g = st.slider('Body mass (g)', 2700.0, 6300.0, 4207.0)
-  gender = st.selectbox('Gender', ('male', 'female'))
-  
-  # Create a DataFrame for the input features
-  data = {'island': island,
-          'bill_length_mm': bill_length_mm,
-          'bill_depth_mm': bill_depth_mm,
-          'flipper_length_mm': flipper_length_mm,
-          'body_mass_g': body_mass_g,
-          'sex': gender}
-  input_df = pd.DataFrame(data, index=[0])
-  input_penguins = pd.concat([input_df, X_raw], axis=0)
+with col4:
+    skin_thickness = st.number_input("Skin Thickness", step=1, min_value=0)
+    age = st.number_input("Age", step=1, min_value=21)
 
-with st.expander('Input features'):
-  st.write('**Input penguin**')
-  input_df
-  st.write('**Combined penguins data**')
-  input_penguins
+user_data = {
+    "Pregnancies": [pregnancies],
+    "Glucose": [glucose],
+    "BloodPressure": [blood_pressure],
+    "SkinThickness": [skin_thickness],
+    "Insulin": [insulin],
+    "BMI": [bmi],
+    "DiabetesPedigreeFunction": [dpf],
+    "Age": [age]
+}
+
+user_df = pd.DataFrame(user_data)
+
+classifier = st.selectbox("Model", ("KNN", "Logistic Regression"))
 
 
-# Data preparation
-# Encode X
-encode = ['island', 'sex']
-df_penguins = pd.get_dummies(input_penguins, prefix=encode)
-
-X = df_penguins[1:]
-input_row = df_penguins[:1]
-
-# Encode y
-target_mapper = {'Adelie': 0,
-                 'Chinstrap': 1,
-                 'Gentoo': 2}
-def target_encode(val):
-  return target_mapper[val]
-
-y = y_raw.apply(target_encode)
-
-with st.expander('Data preparation'):
-  st.write('**Encoded X (input penguin)**')
-  input_row
-  st.write('**Encoded y**')
-  y
+def predict(classifier, user_df):
+    user_array = scaler.transform(user_df)
+    if classifier == "KNN":
+        result = knn_model.predict(user_array)[0]
+    elif classifier == "Logistic Regression":
+        result = lg_model.predict(user_array)[0]
+    return result
 
 
-# Model training and inference
-## Train the ML model
-clf = RandomForestClassifier()
-clf.fit(X, y)
-
-## Apply model to make predictions
-prediction = clf.predict(input_row)
-prediction_proba = clf.predict_proba(input_row)
-
-df_prediction_proba = pd.DataFrame(prediction_proba)
-df_prediction_proba.columns = ['Adelie', 'Chinstrap', 'Gentoo']
-df_prediction_proba.rename(columns={0: 'Adelie',
-                                 1: 'Chinstrap',
-                                 2: 'Gentoo'})
-
-# Display predicted species
-st.subheader('Predicted Species')
-st.dataframe(df_prediction_proba,
-             column_config={
-               'Adelie': st.column_config.ProgressColumn(
-                 'Adelie',
-                 format='%f',
-                 width='medium',
-                 min_value=0,
-                 max_value=1
-               ),
-               'Chinstrap': st.column_config.ProgressColumn(
-                 'Chinstrap',
-                 format='%f',
-                 width='medium',
-                 min_value=0,
-                 max_value=1
-               ),
-               'Gentoo': st.column_config.ProgressColumn(
-                 'Gentoo',
-                 format='%f',
-                 width='medium',
-                 min_value=0,
-                 max_value=1
-               ),
-             }, hide_index=True)
-
-
-penguins_species = np.array(['Adelie', 'Chinstrap', 'Gentoo'])
-st.success(str(penguins_species[prediction][0]))
+if st.button("Predict"):
+    result = predict(classifier, user_df)
+    if result == 0:
+        st.write("Not Diagnosed with Diabetes")
+    elif result == 1:
+        st.write("Diagnosed with Diabetes")
+    else:
+        st.write("uhh")
+else:
+    st.write("The result will appear here")
